@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Wistia Video Analytics Pipeline Infrastructure
+
+Parameters:
+  LambdaZip:
+    Type: String
+    Description: Path to Lambda ZIP file
+
+  S3BucketName:
+    Type: String
+    Description: S3 bucket for raw + curated data
+
+  WistiaSecretName:
+    Type: String
+    Default: wistia/api_token
+    Description: Secrets Manager entry that stores WISTIA_API_TOKEN
+
+Resources:
+
+  #####################################################
+  # S3 Bucket
+  #####################################################
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      VersioningConfiguration:
+        Status: Enabled
+
+  #####################################################
+  # DynamoDB Watermark Table
+  #####################################################
+  WatermarkTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: wistia-watermarks
+      AttributeDefinitions:
+        - AttributeName: entity
+          AttributeType: S
+      KeySchema:
+        - AttributeName: entity
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  #####################################################
+  # Secrets Manager (Wistia API Token)
+  #####################################################
+  WistiaSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Ref WistiaSecretName
+      Description: Wistia API Token storage
+      SecretString: '{"WISTIA_API_TOKEN":"0323ade64e13f79821bdc0f2a9410d9ec3873aa9df01f8a4a54d4e0f3dd2e6b4"}'
+
+  #####################################################
+  # Lambda IAM Role
+  #####################################################
+  WistiaLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: wistia-lambda-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WistiaPipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: "*"
+
+  #####################################################
+  # Lambda Function
+  #####################################################
+  WistiaLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ingest-wistia
+      Handler: ingest_wistia.lambda_handler
+      Runtime: python3.10
+      Role: !GetAtt WistiaLambdaRole.Arn
+      Timeout: 120
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: !Ref LambdaZip
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3BucketName
+          WISTIA_SECRET_NAME: !Ref WistiaSecretName
+          WATERMARK_TABLE: wistia-watermarks
+
+  #####################################################
+  # EventBridge Schedule
+  #####################################################
+  WistiaSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt WistiaLambda.Arn
+          Id: WistiaLambdaTrigger
+
+  PermissionForEventBridgeToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WistiaLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WistiaSchedule.Arn
+
+  #####################################################
+  # EMR Serverless
+  #####################################################
+  EMRServerlessApp:
+    Type: AWS::EMRServerless::Application
+    Properties:
+      Name: wistia-emr
+      ReleaseLabel: emr-6.12.0
+      Type: Spark
+      MaximumCapacity:
+        Cpu: "4 vCPU"
+        Memory: "16 GB"
