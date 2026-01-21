@@ -39,9 +39,9 @@ Resources:
   # S3 Data Lake
   # ==========================
   DataLakeBucket:
-    #Type: AWS::S3::Bucket
+    Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref DataLakeBucketName
+      BucketName: !Sub "${DataLakeBucketName}-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
 
