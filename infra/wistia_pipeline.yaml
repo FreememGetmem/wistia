@@ -131,10 +131,10 @@ Resources:
 
       Environment:
         Variables:
-          S3_BUCKET: !Ref wistia-data
-          RAW_PREFIX: data_raw
-          WATERMARK_TABLE: !Ref WATERMARK_TABLE
-          WISTIA_SECRET_NAME: !Ref WISTIA_SECRET_NAME
+          S3_BUCKET: !Ref DataLakeBucketName
+          RAW_PREFIX: raw/wistia
+          WATERMARK_TABLE: !Ref WatermarkTable
+          WISTIA_SECRET_NAME: !Ref WistiaSecretName
           MEDIA_IDS: "gskhw4w4lm,v08dlrgr7v"
 
   # ==========================
