@@ -66,7 +66,7 @@ jobs:
     - name: Deploy Infrastructure
       run: |
         aws cloudformation create-change-set \
-          --stack-name WistiaPipelineStack \
+          --stack-name wistia-pipeline \
           --change-set-name WistiaChangeSet \
           --template-body infra/wistia_pipeline.yaml \
           --parameters ParameterKey=DataLakeBucketName,ParameterValue=wistia-data \
