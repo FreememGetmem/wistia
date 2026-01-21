@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------
 # Helpers
 # --------------------------------------------------
+
+
 def get_wistia_token():
     try:
         logger.info("Fetching Wistia API token from Secrets Manager")
@@ -108,6 +110,8 @@ def fetch_paginated(url, headers, params=None):
 # --------------------------------------------------
 # Lambda Handler
 # --------------------------------------------------
+
+
 def lambda_handler(event, context):
     logger.info("Starting Wistia ingestion job")
 
