@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------
 
 
-
 def get_wistia_token():
     try:
         logger.info("Fetching Wistia API token from Secrets Manager")
