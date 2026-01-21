@@ -68,6 +68,7 @@ jobs:
         aws cloudformation deploy \
           --stack-name wistia-pipeline \
           --template-file infra/wistia_pipeline.yaml \
+          --parameters ParameterKey=DataLakeBucketName,ParameterValue=wistia-data \
           --capabilities CAPABILITY_NAMED_IAM \
           --parameter-overrides \
             S3BucketName=${{ secrets.S3_BUCKET }} \
