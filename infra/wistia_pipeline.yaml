@@ -1,64 +1,82 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Wistia Video Analytics Pipeline Infrastructure
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Wistia Video Analytics - End-to-End Data Engineering Pipeline
+  (S3, Lambda, IAM, DynamoDB, Secrets Manager, EventBridge)
 
+# ------------------------------------------------------------
+# Parameters
+# ------------------------------------------------------------
 Parameters:
-  LambdaZip:
+  ProjectName:
     Type: String
-    Description: Path to Lambda ZIP file
+    Default: wistia-pipeline
 
-  S3BucketName:
+  DataLakeBucketName:
     Type: String
-    Description: S3 bucket for raw + curated data
+    Description: S3 bucket for raw and curated data
+
+  LambdaCodeS3Key:
+    Type: String
+    Default: lambda/lambda.zip
+    Description: S3 key for Lambda ZIP package
 
   WistiaSecretName:
     Type: String
-    Default: wistia/api_token
-    Description: Secrets Manager entry that stores WISTIA_API_TOKEN
+    Default: wistia/api-token
+    Description: Secrets Manager secret storing WISTIA_API_TOKEN
 
+  ScheduleExpression:
+    Type: String
+    Default: rate(1 hour)
+    Description: EventBridge schedule for ingestion
+
+# ------------------------------------------------------------
+# Resources
+# ------------------------------------------------------------
 Resources:
 
-  #####################################################
-  # S3 Bucket
-  #####################################################
+  # ==========================
+  # S3 Data Lake
+  # ==========================
   DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref S3BucketName
+      BucketName: !Ref DataLakeBucketName
       VersioningConfiguration:
         Status: Enabled
 
-  #####################################################
+  # ==========================
   # DynamoDB Watermark Table
-  #####################################################
+  # ==========================
   WatermarkTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: wistia-watermarks
+      TableName: !Sub "${ProjectName}-watermarks"
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: entity
           AttributeType: S
       KeySchema:
         - AttributeName: entity
           KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
 
-  #####################################################
-  # Secrets Manager (Wistia API Token)
-  #####################################################
-  WistiaSecret:
+  # ==========================
+  # Secrets Manager
+  # ==========================
+  WistiaApiSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Ref WistiaSecretName
-      Description: Wistia API Token storage
-      SecretString: '{"WISTIA_API_TOKEN":"0323ade64e13f79821bdc0f2a9410d9ec3873aa9df01f8a4a54d4e0f3dd2e6b4"}'
+      Description: Wistia API token (DO NOT COMMIT)
+      SecretString: '{"WISTIA_API_TOKEN":"REPLACE_ME"}'
 
-  #####################################################
-  # Lambda IAM Role
-  #####################################################
-  WistiaLambdaRole:
+  # ==========================
+  # IAM Role for Lambda
+  # ==========================
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: wistia-lambda-role
+      RoleName: !Sub "${ProjectName}-lambda-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -66,76 +84,89 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
       Policies:
         - PolicyName: WistiaPipelinePolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: "*"
+              # S3 Write
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+
+              # DynamoDB watermark
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
-                Resource: "*"
+                Resource: !GetAtt WatermarkTable.Arn
 
-  #####################################################
+              # Secrets Manager
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref WistiaApiSecret
+
+  # ==========================
   # Lambda Function
-  #####################################################
-  WistiaLambda:
+  # ==========================
+  IngestWistiaLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: ingest-wistia
-      Handler: ingest_wistia.lambda_handler
+      FunctionName: !Sub "${ProjectName}-ingest"
       Runtime: python3.10
-      Role: !GetAtt WistiaLambdaRole.Arn
+      Handler: ingest_wistia.lambda_handler
       Timeout: 120
+      MemorySize: 512
+      Role: !GetAtt LambdaExecutionRole.Arn
+
       Code:
-        S3Bucket: !Ref S3BucketName
-        S3Key: !Ref LambdaZip
+        S3Bucket: !Ref DataLakeBucketName
+        S3Key: !Ref LambdaCodeS3Key
+
       Environment:
         Variables:
-          S3_BUCKET: !Ref S3BucketName
-          WISTIA_SECRET_NAME: !Ref WistiaSecretName
-          WATERMARK_TABLE: wistia-watermarks
+          S3_BUCKET: !Ref wistia-data
+          RAW_PREFIX: data_raw
+          WATERMARK_TABLE: !Ref WATERMARK_TABLE
+          WISTIA_SECRET_NAME: !Ref WISTIA_SECRET_NAME
+          MEDIA_IDS: "gskhw4w4lm,v08dlrgr7v"
 
-  #####################################################
+  # ==========================
   # EventBridge Schedule
-  #####################################################
-  WistiaSchedule:
+  # ==========================
+  IngestionSchedule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: rate(1 hour)
+      Name: !Sub "${ProjectName}-schedule"
+      ScheduleExpression: !Ref ScheduleExpression
       State: ENABLED
       Targets:
-        - Arn: !GetAtt WistiaLambda.Arn
-          Id: WistiaLambdaTrigger
+        - Id: LambdaTarget
+          Arn: !GetAtt IngestWistiaLambda.Arn
 
-  PermissionForEventBridgeToInvokeLambda:
+  PermissionForEventBridge:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref WistiaLambda
+      FunctionName: !Ref IngestWistiaLambda
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt WistiaSchedule.Arn
+      SourceArn: !GetAtt IngestionSchedule.Arn
 
-  #####################################################
-  # EMR Serverless
-  #####################################################
-  EMRServerlessApp:
-    Type: AWS::EMRServerless::Application
-    Properties:
-      Name: wistia-emr
-      ReleaseLabel: emr-6.12.0
-      Type: Spark
-      MaximumCapacity:
-        Cpu: "4 vCPU"
-        Memory: "16 GB"
+# ------------------------------------------------------------
+# Outputs
+# ------------------------------------------------------------
+Outputs:
+  BucketName:
+    Value: !Ref DataLakeBucketName
+
+  LambdaName:
+    Value: !Ref IngestWistiaLambda
+
+  WatermarkTableName:
+    Value: !Ref WatermarkTable

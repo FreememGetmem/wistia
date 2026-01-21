@@ -1,153 +1,144 @@
-import os
 import json
-import boto3
-import requests
+import os
+import time
+import logging
 from datetime import datetime, timezone
+import requests
+import boto3
 from botocore.exceptions import ClientError
 
-# --- AWS Resources ---
-s3 = boto3.client("s3")
-secrets = boto3.client("secretsmanager")
-dynamodb = boto3.resource("dynamodb")
-
-# --- Environment Variables ---
+# --------------------------------------------------
+# Configuration
+# --------------------------------------------------
 S3_BUCKET = os.environ["S3_BUCKET"]
-RAW_PREFIX = os.environ.get("RAW_PREFIX", "raw/wistia")
-SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
-MEDIA_IDS = os.environ.get("MEDIA_IDS", "gskhw4w4lm,v08dlrgr7v").split(",")
-
+RAW_PREFIX = os.environ["RAW_PREFIX"]
 WATERMARK_TABLE = os.environ["WATERMARK_TABLE"]
-table = dynamodb.Table(WATERMARK_TABLE)
+WISTIA_SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
+MEDIA_IDS = os.environ["MEDIA_IDS"].split(",")
 
+WISTIA_BASE_URL = "https://api.wistia.com/v1/stats"
 
-# ========================================================
-# Helper Functions
-# ========================================================
+# --------------------------------------------------
+# Clients
+# --------------------------------------------------
+s3 = boto3.client("s3")
+ddb = boto3.client("dynamodb")
+secrets = boto3.client("secretsmanager")
 
-def get_api_token():
-    """Retrieve Wistia API key from Secrets Manager."""
-    secret = secrets.get_secret_value(SecretId=SECRET_NAME)
-    return json.loads(secret["SecretString"])["WISTIA_API_TOKEN"]
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+def get_wistia_token():
+    response = secrets.get_secret_value(SecretId=WISTIA_SECRET_NAME)
+    secret = json.loads(response["SecretString"])
+    return secret["WISTIA_API_TOKEN"]
 
 
 def get_watermark(entity):
-    """Retrieve last updated timestamp for incremental loads."""
     try:
-        resp = table.get_item(Key={"entity": entity})
-        return resp.get("Item", {}).get("watermark")
-    except ClientError:
-        return None
+        resp = ddb.get_item(
+            TableName=WATERMARK_TABLE,
+            Key={"entity": {"S": entity}},
+        )
+        if "Item" in resp:
+            return resp["Item"]["last_updated"]["S"]
+    except ClientError as e:
+        logger.error(f"DynamoDB get error: {e}")
+    return None
 
 
-def set_watermark(entity, timestamp):
-    """Update watermark after each run."""
-    table.put_item(Item={"entity": entity, "watermark": timestamp})
-
-
-def write_raw_to_s3(content, key):
-    """Write raw JSON response to S3."""
-    s3.put_object(
-        Bucket=S3_BUCKET,
-        Key=key,
-        Body=json.dumps(content, default=str),
-        ContentType="application/json"
+def update_watermark(entity, timestamp):
+    ddb.put_item(
+        TableName=WATERMARK_TABLE,
+        Item={
+            "entity": {"S": entity},
+            "last_updated": {"S": timestamp},
+        },
     )
 
 
-def paginate(url, headers, params=None):
-    """Generator that handles pagination using ?page and ?per_page."""
-    params = params or {}
-    params.setdefault("page", 1)
-    params.setdefault("per_page", 100)
+def fetch_paginated(url, headers, params=None):
+    results = []
+    page = 1
 
     while True:
-        res = requests.get(url, headers=headers, params=params, timeout=30)
-        res.raise_for_status()
-        data = res.json()
+        p = params.copy() if params else {}
+        p["page"] = page
 
-        yield data
+        r = requests.get(url, headers=headers, params=p, timeout=30)
+        r.raise_for_status()
 
-        # If fewer than per_page items, pagination ends
-        if not isinstance(data, list) or len(data) < params["per_page"]:
+        data = r.json()
+        if not data:
             break
-        params["page"] += 1
+
+        results.extend(data)
+        page += 1
+        time.sleep(0.3)  # rate limit protection
+
+    return results
 
 
-# ========================================================
-# Main Business Logic
-# ========================================================
-
-def fetch_media_data(api_token, run_timestamp):
-    """Ingest media-level stats for each media ID."""
-    headers = {"Authorization": f"Bearer {api_token}"}
-
-    for mid in MEDIA_IDS:
-        url = f"https://api.wistia.com/v1/stats/medias/{mid}.json"
-        resp = requests.get(url, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-
-        key = f"{RAW_PREFIX}/media/{mid}/{run_timestamp}.json"
-        write_raw_to_s3(data, key)
-
-
-def fetch_paginated_entity(entity_name, url, api_token, run_date):
-    """Ingest events and visitors with pagination & incremental logic."""
-    headers = {"Authorization": f"Bearer {api_token}"}
-    watermark = get_watermark(entity_name)
-    max_ts = watermark
-
-    for page in paginate(url, headers):
-        filtered = []
-
-        for item in page:
-            ts = item.get("updated_at") or item.get("created_at")
-            if watermark and ts and ts <= watermark:
-                continue
-
-            filtered.append(item)
-
-            if ts and (max_ts is None or ts > max_ts):
-                max_ts = ts
-
-        if filtered:
-            key = f"{RAW_PREFIX}/{entity_name}/{run_date}/{datetime.now().isoformat()}.json"
-            write_raw_to_s3(filtered, key)
-
-    if max_ts:
-        set_watermark(entity_name, max_ts)
-
-
-# ========================================================
+# --------------------------------------------------
 # Lambda Handler
-# ========================================================
-
+# --------------------------------------------------
 def lambda_handler(event, context):
-    run_timestamp = datetime.now(timezone.utc).isoformat()
-    run_date = run_timestamp[:10]
+    logger.info("Starting Wistia ingestion job")
 
-    api_token = get_api_token()
+    token = get_wistia_token()
+    headers = {"Authorization": f"Bearer {token}"}
 
-    # Media ingestion
-    fetch_media_data(api_token, run_timestamp)
+    run_ts = datetime.now(timezone.utc).isoformat()
 
-    # Events ingestion
-    fetch_paginated_entity(
-        "events",
-        "https://api.wistia.com/v1/stats/events.json",
-        api_token,
-        run_date
-    )
+    for media_id in MEDIA_IDS:
+        logger.info(f"Processing media_id={media_id}")
 
-    # Visitors ingestion
-    fetch_paginated_entity(
-        "visitors",
-        "https://api.wistia.com/v1/stats/visitors.json",
-        api_token,
-        run_date
-    )
+        watermark = get_watermark(media_id)
 
-    return {
-        "status": "SUCCESS",
-        "timestamp": run_timestamp,
-    }
+        # -----------------------------
+        # Media-level stats
+        # -----------------------------
+        media_url = f"{WISTIA_BASE_URL}/medias/{media_id}.json"
+        media_resp = requests.get(media_url, headers=headers)
+        media_resp.raise_for_status()
+        media_stats = media_resp.json()
+
+        # -----------------------------
+        # Visitor-level stats
+        # -----------------------------
+        visitors_url = f"{WISTIA_BASE_URL}/medias/{media_id}/visitors.json"
+        params = {}
+
+        if watermark:
+            params["updated_after"] = watermark
+
+        visitors = fetch_paginated(visitors_url, headers, params)
+
+        payload = {
+            "media_id": media_id,
+            "run_timestamp": run_ts,
+            "media_stats": media_stats,
+            "visitors": visitors,
+        }
+
+        s3_key = (
+            f"{RAW_PREFIX}/media_id={media_id}/"
+            f"ingest_date={run_ts[:10]}/"
+            f"{int(time.time())}.json"
+        )
+
+        s3.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(payload),
+        )
+
+        logger.info(f"Wrote raw data to s3://{S3_BUCKET}/{s3_key}")
+
+        update_watermark(media_id, run_ts)
+
+    logger.info("Wistia ingestion completed successfully")
+    return {"status": "SUCCESS"}

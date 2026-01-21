@@ -4,8 +4,8 @@ from pyspark.sql.types import *
 
 spark = SparkSession.builder.appName("wistia-transform").getOrCreate()
 
-RAW = "s3://YOUR-BUCKET/raw/wistia"
-DWH = "s3://YOUR-BUCKET/dwh/wistia"
+RAW = "s3://wistia-data/data_raw/"
+DWH = "s3://wistia-data/data_curated/"
 
 # ----------------------------------------------------------
 # Load Raw Data
