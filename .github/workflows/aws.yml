@@ -65,13 +65,17 @@ jobs:
     # -----------------------------------
     - name: Deploy Infrastructure
       run: |
+        aws cloudformation validate-template \
+          --template-body file://infra/wistia_pipeline.yaml
+          
         aws cloudformation deploy \
           --stack-name wistia-pipeline \
           --template-file infra/wistia_pipeline.yaml \
-          --capabilities CAPABILITY_NAMED_IAM \
-          --parameter-overrides \
-            S3BucketName=${{ secrets.S3_BUCKET }} \
-            LambdaZip=lambda/lambda.zip
+          --parameter-overrides DataLakeBucketName=wistia-data \
+          --capabilities CAPABILITY_NAMED_IAM
+
+
+
 
     # -----------------------------------
     # Upload PySpark Job
