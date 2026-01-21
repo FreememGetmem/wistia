@@ -99,6 +99,8 @@ Resources:
                   - s3:PutObject
                 Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
 
+                
+
               # DynamoDB watermark
               - Effect: Allow
                 Action:
