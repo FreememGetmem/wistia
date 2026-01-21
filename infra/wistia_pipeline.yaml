@@ -140,6 +140,7 @@ Resources:
   # ==========================
   # EventBridge Schedule
   # ==========================
+  
   IngestionSchedule:
     Type: AWS::Events::Rule
     Properties:
