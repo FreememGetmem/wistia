@@ -39,7 +39,7 @@ Resources:
   # S3 Data Lake
   # ==========================
   DataLakeBucket:
-    Type: AWS::S3::Bucket
+    #Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref DataLakeBucketName
       VersioningConfiguration:
@@ -140,7 +140,7 @@ Resources:
   # ==========================
   # EventBridge Schedule
   # ==========================
-  
+
   IngestionSchedule:
     Type: AWS::Events::Rule
     Properties:
