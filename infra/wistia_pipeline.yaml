@@ -127,7 +127,7 @@ Resources:
 
       Code:
         S3Bucket: !Ref DataLakeBucketName
-        S3Key: !Ref LambdaCodeS3Key
+        S3Key: lambda/lambda.zip
 
       Environment:
         Variables:
