@@ -67,6 +67,7 @@ jobs:
       run: |
         aws cloudformation deploy \
           --stack-name wistia-pipeline \
+          --change-set-name WistiaChangeSet \
           --template-file infra/wistia_pipeline.yaml \
           --parameters ParameterKey=DataLakeBucketName,ParameterValue=wistia-data \
           --capabilities CAPABILITY_NAMED_IAM \
