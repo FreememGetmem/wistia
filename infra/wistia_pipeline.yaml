@@ -27,7 +27,7 @@ Parameters:
 
   ScheduleExpression:
     Type: String
-    Default: rate(1 hour)
+    Default: rate(7 days)
     Description: EventBridge schedule for ingestion
 
 # ------------------------------------------------------------
@@ -97,7 +97,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+                Resource: 
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+                  - !Sub "arn:aws:s3:::${DataLakeBucket}data_raw/*"
+                  - !Sub "arn:aws:s3:::${DataLakeBucket}data_curated/*"
 
               # DynamoDB watermark
               - Effect: Allow

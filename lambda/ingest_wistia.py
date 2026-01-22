@@ -11,7 +11,8 @@ from botocore.exceptions import ClientError, BotoCoreError
 # Configuration
 # --------------------------------------------------
 S3_BUCKET = os.environ["S3_BUCKET"]
-RAW_PREFIX = os.environ["RAW_PREFIX"]
+RAW_PREFIX = os.environ["data_raw"]
+#CURATED_PREFIX = os.environ["data_curated"]
 WATERMARK_TABLE = os.environ["WATERMARK_TABLE"]
 WISTIA_SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
 MEDIA_IDS = os.environ["MEDIA_IDS"].split(",")
@@ -38,7 +39,7 @@ def get_wistia_token():
         logger.info("Fetching Wistia API token from Secrets Manager")
         response = secrets.get_secret_value(SecretId=WISTIA_SECRET_NAME)
         secret = json.loads(response["SecretString"])
-        token = secret["WISTIA_API_TOKEN"]
+        token = secret["wistia-api-token"]
         logger.info("Successfully retrieved Wistia API token")
         return token
     except (ClientError, KeyError, json.JSONDecodeError) as e:
