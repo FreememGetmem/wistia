@@ -56,6 +56,8 @@ Resources:
       AttributeDefinitions:
         - AttributeName: entity
           AttributeType: S
+        - AttributeName: lastupdate
+          AttributeType: S
       KeySchema:
         - AttributeName: entity
           KeyType: HASH
@@ -132,7 +134,8 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET: !Ref DataLakeBucketName
-          RAW_PREFIX: raw/wistia
+          RAW_PREFIX: data_raw
+          CURATED_PREFIX: data_curated
           WATERMARK_TABLE: !Ref WatermarkTable
           WISTIA_SECRET_NAME: !Ref WistiaSecretName
           MEDIA_IDS: "gskhw4w4lm,v08dlrgr7v"
