@@ -113,6 +113,53 @@ Resources:
                 Resource: !Ref WistiaApiSecret
 
   # ==========================
+  # IAM Role for Glue
+  # ==========================
+  GlueExecutionRole:
+  Type: AWS::IAM::Role
+  Properties:
+    RoleName: !Sub "${ProjectName}-glue-role"
+    AssumeRolePolicyDocument:
+      Version: "2012-10-17"
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: glue.amazonaws.com
+          Action: sts:AssumeRole
+    ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+    Policies:
+      - PolicyName: GlueS3Access
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+
+  # ==========================
+  # Glue Job
+  # ==========================
+  TransformWistiaJob:
+  Type: AWS::Glue::Job
+  Properties:
+    Name: !Sub "${ProjectName}-transform"
+    Role: !GetAtt GlueExecutionRole.Arn
+    Command:
+      Name: glueetl
+      ScriptLocation: !Sub "s3://${DataLakeBucketName}/jobs/transform_wistia.py"
+      PythonVersion: "3"
+    GlueVersion: "4.0"
+    WorkerType: G.1X
+    NumberOfWorkers: 2
+    DefaultArguments:
+      "--job-language": "python"
+      "--enable-continuous-cloudwatch-log": "true"
+      "--enable-metrics": "true"
+
+  # ==========================
   # Lambda Function
   # ==========================
   IngestWistiaLambda:
