@@ -56,8 +56,6 @@ Resources:
       AttributeDefinitions:
         - AttributeName: entity
           AttributeType: S
-        - AttributeName: lastupdate
-          AttributeType: S
       KeySchema:
         - AttributeName: entity
           KeyType: HASH
