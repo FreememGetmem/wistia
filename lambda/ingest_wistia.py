@@ -12,7 +12,6 @@ from botocore.exceptions import ClientError, BotoCoreError
 # --------------------------------------------------
 S3_BUCKET = os.environ["S3_BUCKET"]
 RAW_PREFIX = os.environ["data_raw"]
-#CURATED_PREFIX = os.environ["data_curated"]
 WATERMARK_TABLE = os.environ["WATERMARK_TABLE"]
 WISTIA_SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
 MEDIA_IDS = os.environ["MEDIA_IDS"].split(",")
