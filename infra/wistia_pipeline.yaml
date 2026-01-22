@@ -22,7 +22,7 @@ Parameters:
 
   WistiaSecretName:
     Type: String
-    Default: wistia/api-token
+    Default: wistia-api-token
     Description: Secrets Manager secret storing WISTIA_API_TOKEN
 
   ScheduleExpression:
@@ -51,7 +51,7 @@ Resources:
   WatermarkTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${ProjectName}-watermarks"
+      TableName: !Sub wistiadb
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: entity
@@ -68,7 +68,7 @@ Resources:
     Properties:
       Name: !Ref WistiaSecretName
       Description: Wistia API token (DO NOT COMMIT)
-      SecretString: '{"WISTIA_API_TOKEN":"REPLACE_ME"}'
+      SecretString: '{"WISTIA_API_TOKEN":"0323ade64e13f79821bdc0f2a9410d9ec3873aa9df01f8a4a54d4e0f3dd2e6b4"}'
 
   # ==========================
   # IAM Role for Lambda
