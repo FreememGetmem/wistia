@@ -97,10 +97,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: 
-                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
-                  - !Sub "arn:aws:s3:::${DataLakeBucket}data_raw/*"
-                  - !Sub "arn:aws:s3:::${DataLakeBucket}data_curated/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
 
               # DynamoDB watermark
               - Effect: Allow
