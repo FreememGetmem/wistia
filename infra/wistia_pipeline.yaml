@@ -158,6 +158,11 @@ Resources:
         "--job-language": "python"
         "--enable-continuous-cloudwatch-log": "true"
         "--enable-metrics": "true"
+        # 🔽 Custom parameters
+        "--bucket": !Ref DataLakeBucketName
+        "--raw_prefix": "data_raw"
+        "--curated_prefix": "data_curated"
+        "--run_mode": "scheduled"
 
   # ==========================
   # Lambda Function
