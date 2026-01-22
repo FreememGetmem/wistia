@@ -111,6 +111,12 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref WistiaApiSecret
+              
+              # Glue job
+              - Effect: Allow
+                Action:
+                  - glue:StartJobRun
+                Resource: !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/${ProjectName}-transform"
 
   # ==========================
   # IAM Role for Glue
@@ -163,6 +169,7 @@ Resources:
         "--raw_prefix": "data_raw"
         "--curated_prefix": "data_curated"
         "--run_mode": "scheduled"
+        "--GLUE_JOB_NAME": "wistia-tranform"
 
   # ==========================
   # Lambda Function
@@ -189,6 +196,7 @@ Resources:
           WATERMARK_TABLE: !Ref WatermarkTable
           WISTIA_SECRET_NAME: !Ref WistiaSecretName
           MEDIA_IDS: "gskhw4w4lm,v08dlrgr7v"
+          GLUE_JOB_NAME: !Ref TransformWistiaJob
 
   # ==========================
   # EventBridge Schedule
@@ -224,3 +232,7 @@ Outputs:
 
   WatermarkTableName:
     Value: !Ref WatermarkTable
+
+
+# aws cloudformation delete-stack --stack-name wistia-pipeline 
+# aws cloudformation wait stack-delete-complete --stack-name wistia-pipeline

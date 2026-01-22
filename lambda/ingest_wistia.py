@@ -15,7 +15,7 @@ RAW_PREFIX = os.environ["data_raw"]
 WATERMARK_TABLE = os.environ["WATERMARK_TABLE"]
 WISTIA_SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
 MEDIA_IDS = os.environ["MEDIA_IDS"].split(",")
-
+CURATED_PREFIX = os.environ["data_curated"]
 WISTIA_BASE_URL = "https://api.wistia.com/v1/stats"
 
 # --------------------------------------------------
@@ -176,4 +176,23 @@ def lambda_handler(event, context):
         update_watermark(media_id, run_ts)
 
     logger.info("Wistia ingestion completed successfully")
+
+    logger.info("Starting Wistia ingestion job")
+
+    glue = boto3.client("glue")
+
+    glue.start_job_run(
+        JobName=os.environ["GLUE_JOB_NAME"],
+        Arguments={
+            "--run_date": run_ts[:10],
+            "--raw_prefix": f"{CURATED_PREFIX}/ingest_date={run_ts[:10]}",
+            "--trigger": "eventbridge",
+        }
+    )
+    logger.info("Wistia transformation too completed successfully")
+
     return {"status": "SUCCESS"}
+
+    
+
+
