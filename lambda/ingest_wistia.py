@@ -192,7 +192,3 @@ def lambda_handler(event, context):
     logger.info("Wistia transformation too completed successfully")
 
     return {"status": "SUCCESS"}
-
-    
-
-
