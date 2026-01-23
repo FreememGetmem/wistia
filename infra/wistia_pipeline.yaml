@@ -27,7 +27,7 @@ Parameters:
 
   ScheduleExpression:
     Type: String
-    Default: rate(7 day)
+    Default: rate(1 hour)
     Description: EventBridge schedule for ingestion
 
 # ------------------------------------------------------------
@@ -197,7 +197,7 @@ Resources:
         DeleteBehavior: DEPRECATE_IN_DATABASE
       Schedule:
         ScheduleExpression: cron(0 3 * * ? *)
-        
+
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
     Properties:
