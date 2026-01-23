@@ -211,4 +211,5 @@ def lambda_handler(event, context):
         logger.exception(f"Failed to start Glue job: {e}")
 
     logger.info("===== Wistia ingestion job fully completed =====")
+    
     return {"status": "SUCCESS"}
