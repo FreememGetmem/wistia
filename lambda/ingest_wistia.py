@@ -8,6 +8,7 @@ import urllib.error
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 
+
 # --------------------------------------------------
 # Configurations
 # --------------------------------------------------
