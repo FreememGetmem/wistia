@@ -22,7 +22,7 @@ Parameters:
 
   WistiaSecretName:
     Type: String
-    Default: wistia-api-token
+    Default: WISTIA_API_TOKEN
     Description: Secrets Manager secret storing WISTIA_API_TOKEN
 
   ScheduleExpression:
@@ -110,7 +110,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Ref "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${WistiaSecretName}-*"
+                Resource: !Ref "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${WistiaSecretName}"
               
               # Glue job
               - Effect: Allow
@@ -166,8 +166,8 @@ Resources:
         "--enable-metrics": "true"
         # 🔽 Custom parameters
         "--bucket": !Ref DataLakeBucketName
-        "--raw_prefix": "data_raw"
-        "--curated_prefix": "data_curated"
+        "--RAW_PREFIX": "data_raw"
+        "--CURATED_PREFIX": "data_curated"
         "--run_mode": "scheduled"
         "--GLUE_JOB_NAME": "wistia-tranform"
   # ==========================
