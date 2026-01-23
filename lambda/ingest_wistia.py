@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 
 # --------------------------------------------------
-# Configuration
+# Configurations
 # --------------------------------------------------
 S3_BUCKET = os.environ["S3_BUCKET"]
 RAW_PREFIX = os.environ["data_raw"]
