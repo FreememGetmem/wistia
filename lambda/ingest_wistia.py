@@ -149,9 +149,6 @@ def fetch_paginated(url, headers, params=None, context=None, max_pages=1000):
 
 
 def lambda_handler(event, context):
-    start_time = time.time()
-    MAX_RUNTIME = 100  # seconds (leave buffer)
-
     logger.info("===== Starting Wistia ingestion job =====")
 
     token = get_wistia_token()
