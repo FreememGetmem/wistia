@@ -197,6 +197,18 @@ Resources:
         DeleteBehavior: DEPRECATE_IN_DATABASE
       Schedule:
         ScheduleExpression: rate(1 day)
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: wistia-workgroup
+      State: ENABLED
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          OutputLocation: !Sub "s3://${DataLakeBucketName}/athena-results/"
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
 
   # ==========================
   # Glue IAM Role
@@ -288,18 +300,7 @@ Outputs:
   WatermarkTableName:
     Value: !Ref WatermarkTable
 
-AthenaWorkGroup:
-  Type: AWS::Athena::WorkGroup
-  Properties:
-    Name: wistia-workgroup
-    State: ENABLED
-    WorkGroupConfiguration:
-      EnforceWorkGroupConfiguration: true
-      PublishCloudWatchMetricsEnabled: true
-      ResultConfiguration:
-        OutputLocation: !Sub "s3://${DataLakeBucketName}/athena-results/"
-        EncryptionConfiguration:
-          EncryptionOption: SSE_S3
+
 
 
 
