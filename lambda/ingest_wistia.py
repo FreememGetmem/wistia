@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # Helpers
 # --------------------------------------------------
 
+
 def get_wistia_token():
     logger.info("Fetching Wistia API token from Secrets Manager")
     try:
@@ -44,6 +45,7 @@ def get_wistia_token():
     except (ClientError, KeyError, json.JSONDecodeError) as e:
         logger.exception(f"Error fetching Wistia token: {e}")
         raise
+
 
 def get_watermark(entity):
     try:
@@ -60,6 +62,7 @@ def get_watermark(entity):
         logger.exception(f"DynamoDB get_item error for {entity}: {e}")
     return None
 
+
 def update_watermark(entity, timestamp):
     try:
         ddb.put_item(
@@ -72,6 +75,7 @@ def update_watermark(entity, timestamp):
         logger.info(f"Watermark updated successfully for {entity}")
     except (ClientError, BotoCoreError) as e:
         logger.exception(f"Failed to update watermark for {entity}: {e}")
+
 
 def fetch_url(url, headers=None, params=None):
     """Fetch JSON from a URL using urllib"""
@@ -97,6 +101,7 @@ def fetch_url(url, headers=None, params=None):
         logger.error(f"Failed to decode JSON from {full_url}: {e}")
     return None
 
+
 def fetch_paginated(url, headers, params=None):
     results = []
     page = 1
@@ -118,9 +123,11 @@ def fetch_paginated(url, headers, params=None):
     logger.info(f"Fetched total {len(results)} records from {url}")
     return results
 
+
 # --------------------------------------------------
 # Lambda Handler
 # --------------------------------------------------
+
 
 def lambda_handler(event, context):
     logger.info("===== Starting Wistia ingestion job =====")
