@@ -196,7 +196,8 @@ Resources:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: DEPRECATE_IN_DATABASE
       Schedule:
-        ScheduleExpression: rate(1 day)
+        ScheduleExpression: cron(0 3 * * ? *)
+        
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
     Properties:
