@@ -12,11 +12,11 @@ from botocore.exceptions import ClientError, BotoCoreError
 # Configurations
 # --------------------------------------------------
 S3_BUCKET = os.environ["S3_BUCKET"]
-RAW_PREFIX = os.environ["data_raw"]
+RAW_PREFIX = os.environ["RAW_PREFIX"]
 WATERMARK_TABLE = os.environ["WATERMARK_TABLE"]
 WISTIA_SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
 MEDIA_IDS = os.environ["MEDIA_IDS"].split(",")
-CURATED_PREFIX = os.environ["data_curated"]
+CURATED_PREFIX = os.environ["CURATED_PREFIX"]
 WISTIA_BASE_URL = "https://api.wistia.com/v1/stats"
 
 # --------------------------------------------------
@@ -39,7 +39,7 @@ def get_wistia_token():
     try:
         response = secrets.get_secret_value(SecretId=WISTIA_SECRET_NAME)
         secret = json.loads(response["SecretString"])
-        token = secret["wistia-api-token"]
+        token = secret["WISTIA_API_TOKEN"]
         logger.info("Successfully retrieved Wistia API token")
         return token
     except (ClientError, KeyError, json.JSONDecodeError) as e:
@@ -157,12 +157,17 @@ def lambda_handler(event, context):
         # -----------------------------
         # Visitor-level stats
         # -----------------------------
-        visitors_url = f"{WISTIA_BASE_URL}/medias/{media_id}/visitors.json"
-        params = {}
+        visitors_url = f"{WISTIA_BASE_URL}/events.json"
+
+        params = {
+            "media_id": media_id
+        }
+
         if watermark:
-            params["updated_after"] = watermark
+            params["since"] = watermark
 
         visitors = fetch_paginated(visitors_url, headers, params)
+
 
         payload = {
             "media_id": media_id,
