@@ -77,6 +77,7 @@ JOIN wistia_analytics.dim_visitor v
 GROUP BY v.country
 ORDER BY viewers DESC;
 
+
 -- Daily Engagement Trend
 SELECT
   date,
