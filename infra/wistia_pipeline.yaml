@@ -170,6 +170,61 @@ Resources:
         "--curated_prefix": "data_curated"
         "--run_mode": "scheduled"
         "--GLUE_JOB_NAME": "wistia-tranform"
+  # ==========================
+  # Glue Database
+  # ==========================
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: wistia_analytics
+
+  # ==========================
+  # Glue Crawler (Curated Zone)
+  # ==========================
+  GlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: wistia-curated-crawler
+      Role: !GetAtt GlueCrawlerRole.Arn
+      DatabaseName: wistia_analytics
+      Targets:
+        S3Targets:
+          - Path: !Sub "s3://${DataLakeBucketName}/data_curated/"
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: DEPRECATE_IN_DATABASE
+      Schedule:
+        ScheduleExpression: rate(1 day)
+
+  # ==========================
+  # Glue IAM Role
+  # ==========================
+  GlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GlueCrawlerS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}"
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
 
   # ==========================
   # Lambda Function
@@ -232,6 +287,20 @@ Outputs:
 
   WatermarkTableName:
     Value: !Ref WatermarkTable
+
+AthenaWorkGroup:
+  Type: AWS::Athena::WorkGroup
+  Properties:
+    Name: wistia-workgroup
+    State: ENABLED
+    WorkGroupConfiguration:
+      EnforceWorkGroupConfiguration: true
+      PublishCloudWatchMetricsEnabled: true
+      ResultConfiguration:
+        OutputLocation: !Sub "s3://${DataLakeBucketName}/athena-results/"
+        EncryptionConfiguration:
+          EncryptionOption: SSE_S3
+
 
 
 # aws cloudformation delete-stack --stack-name wistia-pipeline 
