@@ -139,11 +139,19 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # Access to data lake objects
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/data_curated/*"
+                  - s3:DeleteObject  # optional if overwriting
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+              
+              # Access to the Glue job script itself
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/jobs/transform_wistia.py"
 
   # ==========================
   # Glue Job
