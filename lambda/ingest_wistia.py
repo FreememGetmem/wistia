@@ -3,7 +3,8 @@ import os
 import time
 import logging
 from datetime import datetime, timezone
-import requests
+import urllib.request
+import urllib.error
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 
@@ -32,11 +33,9 @@ logger = logging.getLogger(__name__)
 # Helpers
 # --------------------------------------------------
 
-
 def get_wistia_token():
-    logger.info("Entering get_wistia_token()")
+    logger.info("Fetching Wistia API token from Secrets Manager")
     try:
-        logger.info("Fetching Wistia API token from Secrets Manager")
         response = secrets.get_secret_value(SecretId=WISTIA_SECRET_NAME)
         secret = json.loads(response["SecretString"])
         token = secret["wistia-api-token"]
@@ -45,12 +44,8 @@ def get_wistia_token():
     except (ClientError, KeyError, json.JSONDecodeError) as e:
         logger.exception(f"Error fetching Wistia token: {e}")
         raise
-    finally:
-        logger.info("Exiting get_wistia_token()")
-
 
 def get_watermark(entity):
-    logger.info(f"Entering get_watermark(entity={entity})")
     try:
         resp = ddb.get_item(
             TableName=WATERMARK_TABLE,
@@ -63,13 +58,9 @@ def get_watermark(entity):
         logger.info(f"No watermark found for {entity}")
     except ClientError as e:
         logger.exception(f"DynamoDB get_item error for {entity}: {e}")
-    finally:
-        logger.info(f"Exiting get_watermark(entity={entity})")
     return None
 
-
 def update_watermark(entity, timestamp):
-    logger.info(f"Entering update_watermark(entity={entity}, timestamp={timestamp})")
     try:
         ddb.put_item(
             TableName=WATERMARK_TABLE,
@@ -81,28 +72,40 @@ def update_watermark(entity, timestamp):
         logger.info(f"Watermark updated successfully for {entity}")
     except (ClientError, BotoCoreError) as e:
         logger.exception(f"Failed to update watermark for {entity}: {e}")
-    finally:
-        logger.info(f"Exiting update_watermark(entity={entity})")
 
+def fetch_url(url, headers=None, params=None):
+    """Fetch JSON from a URL using urllib"""
+    full_url = url
+    if params:
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        full_url = f"{url}?{query}"
+
+    req = urllib.request.Request(full_url)
+    if headers:
+        for k, v in headers.items():
+            req.add_header(k, v)
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data
+    except urllib.error.HTTPError as e:
+        logger.error(f"HTTPError for URL {full_url}: {e.code} {e.reason}")
+    except urllib.error.URLError as e:
+        logger.error(f"URLError for URL {full_url}: {e.reason}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to decode JSON from {full_url}: {e}")
+    return None
 
 def fetch_paginated(url, headers, params=None):
-    logger.info(f"Entering fetch_paginated(url={url})")
     results = []
     page = 1
-
     while True:
         p = params.copy() if params else {}
         p["page"] = page
-
         logger.debug(f"Fetching page {page} from {url} with params={p}")
-        try:
-            r = requests.get(url, headers=headers, params=p, timeout=30)
-            r.raise_for_status()
-        except requests.RequestException as e:
-            logger.exception(f"Request failed for {url}: {e}")
-            break
 
-        data = r.json()
+        data = fetch_url(url, headers, p)
         if not data:
             logger.debug(f"No data returned for page {page}")
             break
@@ -113,13 +116,11 @@ def fetch_paginated(url, headers, params=None):
         time.sleep(0.3)  # rate limit protection
 
     logger.info(f"Fetched total {len(results)} records from {url}")
-    logger.info(f"Exiting fetch_paginated(url={url})")
     return results
 
 # --------------------------------------------------
 # Lambda Handler
 # --------------------------------------------------
-
 
 def lambda_handler(event, context):
     logger.info("===== Starting Wistia ingestion job =====")
@@ -139,13 +140,11 @@ def lambda_handler(event, context):
         # Media-level stats
         # -----------------------------
         media_url = f"{WISTIA_BASE_URL}/medias/{media_id}.json"
-        try:
-            media_resp = requests.get(media_url, headers=headers)
-            media_resp.raise_for_status()
-            media_stats = media_resp.json()
+        media_stats = fetch_url(media_url, headers)
+        if media_stats:
             logger.info(f"Retrieved media stats for media_id={media_id}")
-        except requests.RequestException as e:
-            logger.exception(f"Failed to fetch media stats for {media_id}: {e}")
+        else:
+            logger.error(f"Failed to fetch media stats for {media_id}")
             continue
 
         # -----------------------------
@@ -187,9 +186,7 @@ def lambda_handler(event, context):
     logger.info("===== Wistia ingestion completed =====")
 
     # Trigger Glue job
-    logger.info("Starting Glue transformation job")
     glue = boto3.client("glue")
-
     try:
         glue.start_job_run(
             JobName=os.environ["GLUE_JOB_NAME"],
