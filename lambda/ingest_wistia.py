@@ -77,8 +77,7 @@ def update_watermark(entity, timestamp):
         logger.exception(f"Failed to update watermark for {entity}: {e}")
 
 
-def fetch_url(url, headers=None, params=None):
-    """Fetch JSON from a URL using urllib"""
+def fetch_url(url, headers=None, params=None, max_retries=5):
     full_url = url
     if params:
         query = "&".join(f"{k}={v}" for k, v in params.items())
@@ -89,16 +88,33 @@ def fetch_url(url, headers=None, params=None):
         for k, v in headers.items():
             req.add_header(k, v)
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            return data
-    except urllib.error.HTTPError as e:
-        logger.error(f"HTTPError for URL {full_url}: {e.code} {e.reason}")
-    except urllib.error.URLError as e:
-        logger.error(f"URLError for URL {full_url}: {e.reason}")
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode JSON from {full_url}: {e}")
+    attempt = 0
+    while attempt <= max_retries:
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return json.loads(response.read().decode("utf-8"))
+
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = e.headers.get("Retry-After")
+                sleep_time = int(retry_after) if retry_after else min(2 ** attempt, 30)
+
+                logger.warning(
+                    f"429 Too Many Requests. Backing off for {sleep_time}s "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(sleep_time)
+                attempt += 1
+                continue
+
+            logger.error(f"HTTPError for URL {full_url}: {e.code} {e.reason}")
+            return None
+
+        except urllib.error.URLError as e:
+            logger.error(f"URLError for URL {full_url}: {e.reason}")
+            return None
+
+    logger.error(f"Exceeded max retries for URL {full_url}")
     return None
 
 
@@ -118,7 +134,7 @@ def fetch_paginated(url, headers, params=None):
         results.extend(data)
         logger.debug(f"Fetched {len(data)} records from page {page}")
         page += 1
-        time.sleep(0.3)  # rate limit protection
+        time.sleep(0.6)  # rate limit protection
 
     logger.info(f"Fetched total {len(results)} records from {url}")
     return results
