@@ -110,7 +110,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Ref WistiaApiSecret.Arn
+                Resource: !Ref "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${WistiaSecretName}*"
               
               # Glue job
               - Effect: Allow
