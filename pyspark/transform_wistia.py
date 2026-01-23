@@ -106,4 +106,4 @@ except Exception as e:
 # ----------------------------------------------------------
 logger.info("Stopping Spark session")
 spark.stop()
-logger.info("Spark job completed successfully")
+logger.info("Spark job completed successfully ")
