@@ -110,7 +110,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Ref WistiaApiSecret
+                Resource: !Ref WistiaApiSecret.Arn
               
               # Glue job
               - Effect: Allow
