@@ -25,15 +25,15 @@ s3 = boto3.client("s3")
 ddb = boto3.client("dynamodb")
 secrets = boto3.client("secretsmanager")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------
 # Helpers
 # --------------------------------------------------
 
-
 def get_wistia_token():
+    logger.info("Entering get_wistia_token()")
     try:
         logger.info("Fetching Wistia API token from Secrets Manager")
         response = secrets.get_secret_value(SecretId=WISTIA_SECRET_NAME)
@@ -42,30 +42,34 @@ def get_wistia_token():
         logger.info("Successfully retrieved Wistia API token")
         return token
     except (ClientError, KeyError, json.JSONDecodeError) as e:
-        logger.error(f"Error fetching Wistia token: {e}")
+        logger.exception(f"Error fetching Wistia token: {e}")
         raise
+    finally:
+        logger.info("Exiting get_wistia_token()")
 
 
 def get_watermark(entity):
+    logger.info(f"Entering get_watermark(entity={entity})")
     try:
-        logger.debug(f"Fetching watermark for entity={entity}")
         resp = ddb.get_item(
             TableName=WATERMARK_TABLE,
             Key={"entity": {"S": entity}},
         )
         if "Item" in resp:
             watermark = resp["Item"]["last_updated"]["S"]
-            logger.debug(f"Found watermark for {entity}: {watermark}")
+            logger.info(f"Found watermark for {entity}: {watermark}")
             return watermark
-        logger.debug(f"No watermark found for {entity}")
+        logger.info(f"No watermark found for {entity}")
     except ClientError as e:
-        logger.error(f"DynamoDB get_item error for {entity}: {e}")
+        logger.exception(f"DynamoDB get_item error for {entity}: {e}")
+    finally:
+        logger.info(f"Exiting get_watermark(entity={entity})")
     return None
 
 
 def update_watermark(entity, timestamp):
+    logger.info(f"Entering update_watermark(entity={entity}, timestamp={timestamp})")
     try:
-        logger.info(f"Updating watermark for entity={entity} to {timestamp}")
         ddb.put_item(
             TableName=WATERMARK_TABLE,
             Item={
@@ -75,10 +79,13 @@ def update_watermark(entity, timestamp):
         )
         logger.info(f"Watermark updated successfully for {entity}")
     except (ClientError, BotoCoreError) as e:
-        logger.error(f"Failed to update watermark for {entity}: {e}")
+        logger.exception(f"Failed to update watermark for {entity}: {e}")
+    finally:
+        logger.info(f"Exiting update_watermark(entity={entity})")
 
 
 def fetch_paginated(url, headers, params=None):
+    logger.info(f"Entering fetch_paginated(url={url})")
     results = []
     page = 1
 
@@ -91,7 +98,7 @@ def fetch_paginated(url, headers, params=None):
             r = requests.get(url, headers=headers, params=p, timeout=30)
             r.raise_for_status()
         except requests.RequestException as e:
-            logger.error(f"Request failed for {url}: {e}")
+            logger.exception(f"Request failed for {url}: {e}")
             break
 
         data = r.json()
@@ -105,15 +112,15 @@ def fetch_paginated(url, headers, params=None):
         time.sleep(0.3)  # rate limit protection
 
     logger.info(f"Fetched total {len(results)} records from {url}")
+    logger.info(f"Exiting fetch_paginated(url={url})")
     return results
 
 # --------------------------------------------------
 # Lambda Handler
 # --------------------------------------------------
 
-
 def lambda_handler(event, context):
-    logger.info("Starting Wistia ingestion job")
+    logger.info("===== Starting Wistia ingestion job =====")
 
     token = get_wistia_token()
     headers = {"Authorization": f"Bearer {token}"}
@@ -136,7 +143,7 @@ def lambda_handler(event, context):
             media_stats = media_resp.json()
             logger.info(f"Retrieved media stats for media_id={media_id}")
         except requests.RequestException as e:
-            logger.error(f"Failed to fetch media stats for {media_id}: {e}")
+            logger.exception(f"Failed to fetch media stats for {media_id}: {e}")
             continue
 
         # -----------------------------
@@ -170,25 +177,29 @@ def lambda_handler(event, context):
             )
             logger.info(f"Wrote raw data to s3://{S3_BUCKET}/{s3_key}")
         except (ClientError, BotoCoreError) as e:
-            logger.error(f"Failed to write S3 object for {media_id}: {e}")
+            logger.exception(f"Failed to write S3 object for {media_id}: {e}")
             continue
 
         update_watermark(media_id, run_ts)
 
-    logger.info("Wistia ingestion completed successfully")
+    logger.info("===== Wistia ingestion completed =====")
 
-    logger.info("Starting Wistia ingestion job")
-
+    # Trigger Glue job
+    logger.info("Starting Glue transformation job")
     glue = boto3.client("glue")
 
-    glue.start_job_run(
-        JobName=os.environ["GLUE_JOB_NAME"],
-        Arguments={
-            "--run_date": run_ts[:10],
-            "--raw_prefix": f"{CURATED_PREFIX}/ingest_date={run_ts[:10]}",
-            "--trigger": "eventbridge",
-        }
-    )
-    logger.info("Wistia transformation too completed successfully")
+    try:
+        glue.start_job_run(
+            JobName=os.environ["GLUE_JOB_NAME"],
+            Arguments={
+                "--run_date": run_ts[:10],
+                "--raw_prefix": f"{CURATED_PREFIX}/ingest_date={run_ts[:10]}",
+                "--trigger": "eventbridge",
+            }
+        )
+        logger.info("Glue transformation job started successfully")
+    except (ClientError, BotoCoreError) as e:
+        logger.exception(f"Failed to start Glue job: {e}")
 
+    logger.info("===== Wistia ingestion job fully completed =====")
     return {"status": "SUCCESS"}
