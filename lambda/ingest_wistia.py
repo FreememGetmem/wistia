@@ -119,25 +119,27 @@ def fetch_url(url, headers=None, params=None, max_retries=5):
     return None
 
 
-def fetch_paginated(url, headers, params=None):
+def fetch_paginated(url, headers, params=None, context=None, max_pages=1000):
     results = []
     page = 1
-    while True:
+
+    while page <= max_pages:
+        # ⏱ Stop if less than 10s left
+        if context and context.get_remaining_time_in_millis() < 10_000:
+            logger.warning("Stopping pagination early due to Lambda timeout risk")
+            break
+
         p = params.copy() if params else {}
         p["page"] = page
-        logger.debug(f"Fetching page {page} from {url} with params={p}")
 
         data = fetch_url(url, headers, p)
         if not data:
-            logger.debug(f"No data returned for page {page}")
             break
 
         results.extend(data)
-        logger.debug(f"Fetched {len(data)} records from page {page}")
         page += 1
-        time.sleep(0.6)  # rate limit protection
+        time.sleep(0.6)
 
-    logger.info(f"Fetched total {len(results)} records from {url}")
     return results
 
 
@@ -147,6 +149,9 @@ def fetch_paginated(url, headers, params=None):
 
 
 def lambda_handler(event, context):
+    start_time = time.time()
+    MAX_RUNTIME = 100  # seconds (leave buffer)
+
     logger.info("===== Starting Wistia ingestion job =====")
 
     token = get_wistia_token()
@@ -180,10 +185,25 @@ def lambda_handler(event, context):
             "media_id": media_id
         }
 
-        if watermark:
-            params["since"] = watermark
+        from datetime import timedelta
 
-        visitors = fetch_paginated(visitors_url, headers, params)
+        if watermark:
+            since = watermark
+        else:
+            since = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+
+        params = {
+            "media_id": media_id,
+            "since": since
+        }
+
+        visitors = fetch_paginated(
+                                    visitors_url,
+                                    headers,
+                                    params,
+                                    context=context
+                                )
+
         payload = {
             "media_id": media_id,
             "run_timestamp": run_ts,

@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 logger.info("Starting Spark session")
 spark = SparkSession.builder.appName("wistia-transform").getOrCreate()
 
-RAW = "s3://wistia-data-635374934580-us-west-1/data_raw/"
-DWH = "s3://wistia-data-635374934580-us-west-1/data_curated/"
+RAW = "s3://wistia-data/data_raw/"
+DWH = "s3://wistia-data/data_curated/"
 
 # ----------------------------------------------------------
 # Load Raw Data
