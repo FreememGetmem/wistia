@@ -167,8 +167,6 @@ def lambda_handler(event, context):
             params["since"] = watermark
 
         visitors = fetch_paginated(visitors_url, headers, params)
-
-
         payload = {
             "media_id": media_id,
             "run_timestamp": run_ts,
