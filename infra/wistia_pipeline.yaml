@@ -187,7 +187,7 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
         Name: wistia_analytics
-
+  
   # ==========================
   # Glue Crawler (Curated Zone)
   # ==========================
@@ -202,24 +202,7 @@ Resources:
           - Path: !Sub "s3://${DataLakeBucketName}/data_curated/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
-        DeleteBehavior: DEPRECATE_IN_DATABASE
-
-  # ==========================
-  # Glue Crawler Trigger
-  # ==========================
-  GlueCrawlerTrigger:
-    Type: AWS::Glue::Trigger
-    Properties:
-      Name: wistia-curated-crawler-on-success
-      Type: CONDITIONAL
-      StartOnCreation: true
-      Actions:
-        - CrawlerName: !Ref GlueCrawler
-      Predicate:
-        Conditions:
-          - LogicalOperator: EQUALS
-            JobName: !Ref TransformWistiaJob
-            State: SUCCEEDED    
+        DeleteBehavior: DEPRECATE_IN_DATABASE  
 
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
@@ -258,9 +241,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:ListBucket
+                  - glue:StartCrawler
                 Resource:
                   - !Sub "arn:aws:s3:::${DataLakeBucketName}"
                   - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:crawler/wistia-curated-crawler"
 
   # ==========================
   # Lambda Function
