@@ -172,7 +172,7 @@ Resources:
         "--job-language": "python"
         "--enable-continuous-cloudwatch-log": "true"
         "--enable-metrics": "true"
-        # 🔽 Custom parameters
+        # ? Custom parameters
         "--bucket": !Ref DataLakeBucketName
         "--RAW_PREFIX": "data_raw"
         "--CURATED_PREFIX": "data_curated"
@@ -203,8 +203,23 @@ Resources:
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: DEPRECATE_IN_DATABASE
-      Schedule:
-        ScheduleExpression: cron(0 3 * * ? *)
+
+  # ==========================
+  # Glue Crawler Trigger
+  # ==========================
+  GlueCrawlerTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name: wistia-curated-crawler-on-success
+      Type: CONDITIONAL
+      StartOnCreation: true
+      Actions:
+        - CrawlerName: !Ref GlueCrawler
+      Predicate:
+        Conditions:
+          - LogicalOperator: EQUALS
+            JobName: !Ref TransformWistiaJob
+            State: SUCCEEDED    
 
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup

@@ -8,15 +8,16 @@ import urllib.error
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 
+
 # --------------------------------------------------
-# Configuration
+# Configurations
 # --------------------------------------------------
 S3_BUCKET = os.environ["S3_BUCKET"]
-RAW_PREFIX = os.environ["data_raw"]
+RAW_PREFIX = os.environ["RAW_PREFIX"]
 WATERMARK_TABLE = os.environ["WATERMARK_TABLE"]
 WISTIA_SECRET_NAME = os.environ["WISTIA_SECRET_NAME"]
 MEDIA_IDS = os.environ["MEDIA_IDS"].split(",")
-CURATED_PREFIX = os.environ["data_curated"]
+CURATED_PREFIX = os.environ["CURATED_PREFIX"]
 WISTIA_BASE_URL = "https://api.wistia.com/v1/stats"
 
 # --------------------------------------------------
@@ -39,7 +40,7 @@ def get_wistia_token():
     try:
         response = secrets.get_secret_value(SecretId=WISTIA_SECRET_NAME)
         secret = json.loads(response["SecretString"])
-        token = secret["wistia-api-token"]
+        token = secret["WISTIA_API_TOKEN"]
         logger.info("Successfully retrieved Wistia API token")
         return token
     except (ClientError, KeyError, json.JSONDecodeError) as e:
@@ -77,8 +78,7 @@ def update_watermark(entity, timestamp):
         logger.exception(f"Failed to update watermark for {entity}: {e}")
 
 
-def fetch_url(url, headers=None, params=None):
-    """Fetch JSON from a URL using urllib"""
+def fetch_url(url, headers=None, params=None, max_retries=5):
     full_url = url
     if params:
         query = "&".join(f"{k}={v}" for k, v in params.items())
@@ -89,38 +89,57 @@ def fetch_url(url, headers=None, params=None):
         for k, v in headers.items():
             req.add_header(k, v)
 
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            return data
-    except urllib.error.HTTPError as e:
-        logger.error(f"HTTPError for URL {full_url}: {e.code} {e.reason}")
-    except urllib.error.URLError as e:
-        logger.error(f"URLError for URL {full_url}: {e.reason}")
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to decode JSON from {full_url}: {e}")
+    attempt = 0
+    while attempt <= max_retries:
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return json.loads(response.read().decode("utf-8"))
+
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = e.headers.get("Retry-After")
+                sleep_time = int(retry_after) if retry_after else min(2 ** attempt, 30)
+
+                logger.warning(
+                    f"429 Too Many Requests. Backing off for {sleep_time}s "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(sleep_time)
+                attempt += 1
+                continue
+
+            logger.error(f"HTTPError for URL {full_url}: {e.code} {e.reason}")
+            return None
+
+        except urllib.error.URLError as e:
+            logger.error(f"URLError for URL {full_url}: {e.reason}")
+            return None
+
+    logger.error(f"Exceeded max retries for URL {full_url}")
     return None
 
 
-def fetch_paginated(url, headers, params=None):
+def fetch_paginated(url, headers, params=None, context=None, max_pages=1000):
     results = []
     page = 1
-    while True:
+
+    while page <= max_pages:
+        # ⏱ Stop if less than 10s left
+        if context and context.get_remaining_time_in_millis() < 10_000:
+            logger.warning("Stopping pagination early due to Lambda timeout risk")
+            break
+
         p = params.copy() if params else {}
         p["page"] = page
-        logger.debug(f"Fetching page {page} from {url} with params={p}")
 
         data = fetch_url(url, headers, p)
         if not data:
-            logger.debug(f"No data returned for page {page}")
             break
 
         results.extend(data)
-        logger.debug(f"Fetched {len(data)} records from page {page}")
         page += 1
-        time.sleep(0.3)  # rate limit protection
+        time.sleep(0.6)
 
-    logger.info(f"Fetched total {len(results)} records from {url}")
     return results
 
 
@@ -157,12 +176,30 @@ def lambda_handler(event, context):
         # -----------------------------
         # Visitor-level stats
         # -----------------------------
-        visitors_url = f"{WISTIA_BASE_URL}/medias/{media_id}/visitors.json"
-        params = {}
-        if watermark:
-            params["updated_after"] = watermark
+        visitors_url = f"{WISTIA_BASE_URL}/events.json"
 
-        visitors = fetch_paginated(visitors_url, headers, params)
+        params = {
+            "media_id": media_id
+        }
+
+        from datetime import timedelta
+
+        if watermark:
+            since = watermark
+        else:
+            since = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+
+        params = {
+            "media_id": media_id,
+            "since": since
+        }
+
+        visitors = fetch_paginated(
+                                    visitors_url,
+                                    headers,
+                                    params,
+                                    context=context
+                                )
 
         payload = {
             "media_id": media_id,

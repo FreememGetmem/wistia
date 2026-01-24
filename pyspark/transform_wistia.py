@@ -73,18 +73,18 @@ try:
     dim_visitor = (
                     media_df.select(
                         col("media_id"),
-                        explode(col("media_stats.visitors")).alias("visitor")
+                        explode(col("visitors")).alias("visitor")  # explode the visitors array
                     )
                     .select(
                         col("media_id"),
-                        col("visitor.id").alias("visitor_id"),
-                        col("visitor.ip_address"),
+                        col("visitor.visitor_key").alias("visitor_id"),  # use visitor_key instead of id
+                        col("visitor.ip").alias("ip_address"),
                         col("visitor.country"),
-                        col("visitor.created_at")
+                        col("visitor.received_at").alias("created_at")
                     )
-                )
+                ).dropDuplicates(["visitor_id"])
     logger.info(f"dim_visitor has {dim_visitor.count()} unique records")
-    
+    logger.info(dim_visitor.printSchema())
     dim_visitor.write.mode("overwrite").parquet(f"{DWH}/dim_visitor")
     logger.info(f"dim_visitor written to {DWH}/dim_visitor")
 except Exception as e:
@@ -95,20 +95,27 @@ except Exception as e:
 # FACT MEDIA ENGAGEMENT
 # ----------------------------------------------------------
 logger.info("Transforming FACT MEDIA ENGAGEMENT")
-try:
-    fact = (
-                                media_df.select(
-                                    col("media_id"),
-                                    current_date().alias("date"),
-                                    col("media_stats.play_count"),
-                                    col("media_stats.load_count"),
-                                    col("media_stats.hours_watched"),
-                                    col("media_stats.play_rate")
-                                )
-                            )
-    logger.info(f"fact_media_engagement has {fact.count()} records")
+from pyspark.sql.functions import to_date
 
-    fact.write.mode("append").partitionBy("date").parquet(f"{DWH}/fact_media_engagement")
+try:
+    fact_media_engagement = (
+        media_df.select(
+            col("media_id"),
+            to_date(col("run_timestamp")).alias("date"),  # use run_timestamp as date
+            col("media_stats.engagement"),
+            col("media_stats.hours_watched"),
+            col("media_stats.load_count"),
+            col("media_stats.play_count"),
+            col("media_stats.play_rate")
+        )
+    )
+
+    logger.info(f"fact_media_engagement has {fact_media_engagement.count()} records")
+    logger.info(fact_media_engagement.printSchema())
+    fact_media_engagement.write.mode("append") \
+        .partitionBy("date") \
+        .parquet(f"{DWH}/fact_media_engagement")
+
     logger.info(f"fact_media_engagement written to {DWH}/fact_media_engagement with partitioning by date")
 except Exception as e:
     logger.exception(f"Failed to transform or write fact_media_engagement: {e}")
