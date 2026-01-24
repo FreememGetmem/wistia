@@ -117,6 +117,13 @@ Resources:
                 Action:
                   - glue:StartJobRun
                 Resource: !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/${ProjectName}-transform"
+              
+              # Crawler run
+              - Effect: Allow
+                Action:
+                  - glue:StartCrawler
+                Resource:
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:crawler/wistia-curated-crawler"
 
   # ==========================
   # IAM Role for Glue
@@ -187,7 +194,7 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
         Name: wistia_analytics
-  
+
   # ==========================
   # Glue Crawler (Curated Zone)
   # ==========================
@@ -240,12 +247,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                  - s3:ListBucket
-                  - glue:StartCrawler
+                  - s3:ListBucket                  
                 Resource:
                   - !Sub "arn:aws:s3:::${DataLakeBucketName}"
-                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
-                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:crawler/wistia-curated-crawler"
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"                 
 
   # ==========================
   # Lambda Function
