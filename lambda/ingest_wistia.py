@@ -243,8 +243,6 @@ def lambda_handler(event, context):
         logger.info("Glue transformation job started successfully")
     except (ClientError, BotoCoreError) as e:
         logger.exception(f"Failed to start Glue job: {e}")
-    
     glue.start_crawler(Name="wistia-curated-crawler")
-    
     logger.info("===== Wistia ingestion job fully completed =====")
     return {"status": "SUCCESS"}
