@@ -122,8 +122,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - glue:StartCrawler
-                Resource:
-                  - !Sub "*"
+                Resource: "*"
 
   # ==========================
   # IAM Role for Glue
