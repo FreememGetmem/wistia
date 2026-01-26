@@ -11,10 +11,6 @@ Parameters:
     Type: String
     Default: wistia-pipeline
 
-  DataLakeBucket:
-    Type: String
-    Description: S3 bucket for raw and curated data
-
   LambdaCodeS3Key:
     Type: String
     Default: lambda/lambda.zip
