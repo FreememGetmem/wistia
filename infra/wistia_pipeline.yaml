@@ -11,7 +11,7 @@ Parameters:
     Type: String
     Default: wistia-pipeline
 
-  DataLakeBucket:
+  DataLakeBucketName:
     Type: String
     Description: S3 bucket for raw and curated data
 
