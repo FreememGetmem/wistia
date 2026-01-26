@@ -5,7 +5,6 @@ import requests
 API_TOKEN = "0323ade64e13f79821bdc0f2a9410d9ec3873aa9df01f8a4a54d4e0f3dd2e6b4"  
 MEDIA_ID = "v08dlrgr7v"  # The given media ID
 
-
 # Wistia Stats API Endpoint
 url = f"https://api.wistia.com/v1/stats/medias/{MEDIA_ID}.json"
 
