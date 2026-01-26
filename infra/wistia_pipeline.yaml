@@ -38,7 +38,7 @@ Resources:
   # ==========================
   # S3 Data Lake
   # ==========================
-  DataLakeBucket:
+  DataLakeBucketName:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${ProjectName}-data-${AWS::AccountId}-${AWS::Region}"
@@ -200,6 +200,10 @@ Resources:
   # ==========================
   GlueCrawler:
     Type: AWS::Glue::Crawler
+    DependsOn:
+      - DataLakeBucketName
+      - DataLakeBucketPolicy
+      - GlueCrawlerRole
     Properties:
       Name: wistia-curated-crawler
       Role: !GetAtt GlueCrawlerRole.Arn
@@ -209,11 +213,7 @@ Resources:
           - Path: !Sub "s3://${DataLakeBucketName}/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
-        DeleteBehavior: DEPRECATE_IN_DATABASE  
-      DependsOn:
-        - DataLakeBucket
-        - DataLakeBucketPolicy
-        - GlueCrawlerRole
+        DeleteBehavior: DEPRECATE_IN_DATABASE
 
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
@@ -308,7 +308,7 @@ Resources:
   DataLakeBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref DataLakeBucket
+      Bucket: !Ref DataLakeBucketName
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -319,7 +319,7 @@ Resources:
             Action:
               - s3:ListBucket
             Resource:
-              - !Sub "arn:aws:s3:::${DataLakeBucket}"
+              - !Sub "arn:aws:s3:::${DataLakeBucketName}"
 
           - Sid: AllowGlueCrawlerRead
             Effect: Allow
@@ -328,7 +328,7 @@ Resources:
             Action:
               - s3:GetObject
             Resource:
-              - !Sub "arn:aws:s3:::${DataLakeBucket}/*"
+              - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
 
 # ------------------------------------------------------------
 # Outputs
