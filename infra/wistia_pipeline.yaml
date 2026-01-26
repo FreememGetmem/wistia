@@ -38,7 +38,7 @@ Resources:
   # ==========================
   # S3 Data Lake
   # ==========================
-  DataLakeBucketName:
+  DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${ProjectName}-data-${AWS::AccountId}-${AWS::Region}"
@@ -97,7 +97,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucket}/*"
 
               # DynamoDB watermark
               - Effect: Allow
@@ -152,13 +152,13 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject  # optional if overwriting
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucket}/*"
               
               # Access to the Glue job script itself
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/jobs/transform_wistia.py"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucket}/jobs/transform_wistia.py"
 
   # ==========================
   # Glue Job
@@ -170,7 +170,7 @@ Resources:
       Role: !GetAtt GlueExecutionRole.Arn
       Command:
         Name: glueetl
-        ScriptLocation: !Sub "s3://${DataLakeBucketName}/jobs/transform_wistia.py"
+        ScriptLocation: !Sub "s3://${DataLakeBucket}/jobs/transform_wistia.py"
         PythonVersion: "3"
       GlueVersion: "4.0"
       WorkerType: G.1X
@@ -180,7 +180,7 @@ Resources:
         "--enable-continuous-cloudwatch-log": "true"
         "--enable-metrics": "true"
         # ? Custom parameters
-        "--bucket": !Ref DataLakeBucketName
+        "--bucket": !Ref DataLakeBucket
         "--RAW_PREFIX": "data_raw"
         "--CURATED_PREFIX": "data_curated"
         "--run_mode": "scheduled"
@@ -201,7 +201,7 @@ Resources:
   GlueCrawler:
     Type: AWS::Glue::Crawler
     DependsOn:
-      - DataLakeBucketName
+      - DataLakeBucket
       - DataLakeBucketPolicy
       - GlueCrawlerRole
     Properties:
@@ -210,7 +210,7 @@ Resources:
       DatabaseName: wistia_analytics
       Targets:
         S3Targets:
-          - Path: !Sub "s3://${DataLakeBucketName}/"
+          - Path: !Sub "s3://${DataLakeBucket}/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: DEPRECATE_IN_DATABASE
@@ -224,7 +224,7 @@ Resources:
         EnforceWorkGroupConfiguration: true
         PublishCloudWatchMetricsEnabled: true
         ResultConfiguration:
-          OutputLocation: !Sub "s3://${DataLakeBucketName}/athena-results/"
+          OutputLocation: !Sub "s3://${DataLakeBucket}/athena-results/"
           EncryptionConfiguration:
             EncryptionOption: SSE_S3
 
@@ -253,8 +253,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket                  
                 Resource:
-                  - !Sub "arn:aws:s3:::${DataLakeBucketName}"
-                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"                 
+                  - !Sub "arn:aws:s3:::${DataLakeBucket}"
+                  - !Sub "arn:aws:s3:::${DataLakeBucket}/*"                 
 
   # ==========================
   # Lambda Function
@@ -270,12 +270,12 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
 
       Code:
-        S3Bucket: !Ref DataLakeBucketName
+        S3Bucket: !Ref DataLakeBucket
         S3Key: lambda/lambda.zip
 
       Environment:
         Variables:
-          S3_BUCKET: !Ref DataLakeBucketName
+          S3_BUCKET: !Ref DataLakeBucket
           RAW_PREFIX: data_raw
           CURATED_PREFIX: data_curated
           WATERMARK_TABLE: !Ref WatermarkTable
@@ -308,7 +308,7 @@ Resources:
   DataLakeBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref DataLakeBucketName
+      Bucket: !Ref DataLakeBucket
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -319,7 +319,7 @@ Resources:
             Action:
               - s3:ListBucket
             Resource:
-              - !Sub "arn:aws:s3:::${DataLakeBucketName}"
+              - !Sub "arn:aws:s3:::${DataLakeBucket}"
 
           - Sid: AllowGlueCrawlerRead
             Effect: Allow
@@ -328,14 +328,14 @@ Resources:
             Action:
               - s3:GetObject
             Resource:
-              - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+              - !Sub "arn:aws:s3:::${DataLakeBucket}/*"
 
 # ------------------------------------------------------------
 # Outputs
 # ------------------------------------------------------------
 Outputs:
   BucketName:
-    Value: !Ref DataLakeBucketName
+    Value: !Ref DataLakeBucket
 
   LambdaName:
     Value: !Ref IngestWistiaLambda
