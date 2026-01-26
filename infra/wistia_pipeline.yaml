@@ -38,7 +38,7 @@ Resources:
   # ==========================
   # S3 Data Lake
   # ==========================
-  DataLakeBucketName:
+  DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${DataLakeBucketName}-${AWS::AccountId}-${AWS::Region}"
