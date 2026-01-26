@@ -210,6 +210,10 @@ Resources:
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: DEPRECATE_IN_DATABASE  
+      DependsOn:
+        - DataLakeBucket
+        - DataLakeBucketPolicy
+        - GlueCrawlerRole
 
   AthenaWorkGroup:
     Type: AWS::Athena::WorkGroup
@@ -300,6 +304,31 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt IngestionSchedule.Arn
+  
+  DataLakeBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataLakeBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowGlueCrawlerAccess
+            Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action:
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:aws:s3:::${DataLakeBucket}"
+
+          - Sid: AllowGlueObjectRead
+            Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub "arn:aws:s3:::${DataLakeBucket}/*"
 
 # ------------------------------------------------------------
 # Outputs

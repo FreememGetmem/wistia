@@ -72,7 +72,7 @@ jobs:
         aws cloudformation deploy \
           --stack-name wistia-pipeline \
           --template-file infra/wistia_pipeline.yaml \
-          --parameter-overrides DataLakeBucketName=wistia-data-635374934580-us-west-1 \
+          --parameter-overrides DataLakeBucketName=wistia-data \
             ScheduleExpression="rate(7 days)" \
             ScheduleStartDate="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
             ScheduleEndDate="$(date -u -d "+7 days" +"%Y-%m-%dT%H:%M:%SZ")" \
