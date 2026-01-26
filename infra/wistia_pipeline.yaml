@@ -11,6 +11,10 @@ Parameters:
     Type: String
     Default: wistia-pipeline
 
+  DataLakeBucketName:
+    Type: String
+    Description: S3 bucket for raw and curated data
+
   LambdaCodeS3Key:
     Type: String
     Default: lambda/lambda.zip
@@ -37,7 +41,7 @@ Resources:
   DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${DataLakeBucket}-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${DataLakeBucketName}-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
 
@@ -93,7 +97,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucket}/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
 
               # DynamoDB watermark
               - Effect: Allow
@@ -112,13 +116,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - glue:StartJobRun
-                Resource: "*"
+                Resource: !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/${ProjectName}-transform"
               
               # Crawler run
               - Effect: Allow
                 Action:
                   - glue:StartCrawler
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:crawler/wistia-curated-crawler"
 
   # ==========================
   # IAM Role for Glue
@@ -147,13 +152,13 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject  # optional if overwriting
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucket}/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
               
               # Access to the Glue job script itself
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${DataLakeBucket}/jobs/transform_wistia.py"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/jobs/transform_wistia.py"
 
   # ==========================
   # Glue Job
@@ -165,7 +170,7 @@ Resources:
       Role: !GetAtt GlueExecutionRole.Arn
       Command:
         Name: glueetl
-        ScriptLocation: !Sub "s3://${DataLakeBucket}/jobs/transform_wistia.py"
+        ScriptLocation: !Sub "s3://${DataLakeBucketName}/jobs/transform_wistia.py"
         PythonVersion: "3"
       GlueVersion: "4.0"
       WorkerType: G.1X
@@ -175,7 +180,7 @@ Resources:
         "--enable-continuous-cloudwatch-log": "true"
         "--enable-metrics": "true"
         # ? Custom parameters
-        "--bucket": !Ref DataLakeBucket
+        "--bucket": !Ref DataLakeBucketName
         "--RAW_PREFIX": "data_raw"
         "--CURATED_PREFIX": "data_curated"
         "--run_mode": "scheduled"
@@ -201,7 +206,7 @@ Resources:
       DatabaseName: wistia_analytics
       Targets:
         S3Targets:
-          - Path: !Sub "s3://${DataLakeBucket}/data_curated/"
+          - Path: !Sub "s3://${DataLakeBucketName}/data_curated/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: DEPRECATE_IN_DATABASE  
@@ -215,7 +220,7 @@ Resources:
         EnforceWorkGroupConfiguration: true
         PublishCloudWatchMetricsEnabled: true
         ResultConfiguration:
-          OutputLocation: !Sub "s3://${DataLakeBucket}/athena-results/"
+          OutputLocation: !Sub "s3://${DataLakeBucketName}/athena-results/"
           EncryptionConfiguration:
             EncryptionOption: SSE_S3
 
@@ -244,8 +249,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket                  
                 Resource:
-                  - !Sub "arn:aws:s3:::${DataLakeBucket}"
-                  - !Sub "arn:aws:s3:::${DataLakeBucket}/*"                 
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}"
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"                 
 
   # ==========================
   # Lambda Function
@@ -261,18 +266,18 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
 
       Code:
-        S3Bucket: !Ref DataLakeBucket
+        S3Bucket: !Ref DataLakeBucketName
         S3Key: lambda/lambda.zip
 
       Environment:
         Variables:
-          S3_BUCKET: !Ref DataLakeBucket
+          S3_BUCKET: !Ref DataLakeBucketName
           RAW_PREFIX: data_raw
           CURATED_PREFIX: data_curated
           WATERMARK_TABLE: !Ref WatermarkTable
           WISTIA_SECRET_NAME: !Ref WistiaSecretName
           MEDIA_IDS: "gskhw4w4lm,v08dlrgr7v"
-          GLUE_JOB_NAME: "wistia-pipeline-transform"
+          GLUE_JOB_NAME: !Ref TransformWistiaJob
 
   # ==========================
   # EventBridge Schedule
@@ -301,7 +306,7 @@ Resources:
 # ------------------------------------------------------------
 Outputs:
   BucketName:
-    Value: !Ref DataLakeBucket
+    Value: !Ref DataLakeBucketName
 
   LambdaName:
     Value: !Ref IngestWistiaLambda
