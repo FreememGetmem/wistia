@@ -312,19 +312,19 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Sid: AllowGlueCrawlerAccess
+          - Sid: AllowGlueCrawlerList
             Effect: Allow
             Principal:
-              Service: glue.amazonaws.com
+              AWS: !GetAtt GlueCrawlerRole.Arn
             Action:
               - s3:ListBucket
             Resource:
               - !Sub "arn:aws:s3:::${DataLakeBucket}"
 
-          - Sid: AllowGlueObjectRead
+          - Sid: AllowGlueCrawlerRead
             Effect: Allow
             Principal:
-              Service: glue.amazonaws.com
+              AWS: !GetAtt GlueCrawlerRole.Arn
             Action:
               - s3:GetObject
             Resource:
