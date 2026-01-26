@@ -41,7 +41,7 @@ Resources:
   DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${DataLakeBucketName}-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${ProjectName}-data-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
 
@@ -206,7 +206,7 @@ Resources:
       DatabaseName: wistia_analytics
       Targets:
         S3Targets:
-          - Path: !Sub "s3://${DataLakeBucketName}/data_curated/"
+          - Path: !Sub "s3://${DataLakeBucketName}/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: DEPRECATE_IN_DATABASE  
