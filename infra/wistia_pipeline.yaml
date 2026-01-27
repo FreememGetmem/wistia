@@ -5,7 +5,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: wistia-pipeline
-    
+
   WistiaSecretName:
     Type: String
     Default: WISTIA_API_TOKEN
@@ -18,11 +18,7 @@ Parameters:
   CuratedPrefix:
     Type: String
     Default: curated/
-
-  MediaIds:
-    Type: String
-    Description: Comma-separated Wistia media IDs
-
+    
   GlueJobRunMode:
     Type: String
     Default: scheduled
