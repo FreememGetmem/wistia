@@ -1,13 +1,13 @@
 {
     "StackEvents": [
         {
-            "StackId": "arn:aws:cloudformation:us-west-1:635374934580:stack/wistia-pipeline/8dafdc40-fb30-11f0-a181-06bbe7d757dd",
-            "EventId": "8daf6710-fb30-11f0-a181-06bbe7d757dd",
+            "StackId": "arn:aws:cloudformation:us-west-1:635374934580:stack/wistia-pipeline/1bd47390-fb32-11f0-9136-021592f8edef",
+            "EventId": "1bd42570-fb32-11f0-9136-021592f8edef",
             "StackName": "wistia-pipeline",
             "LogicalResourceId": "wistia-pipeline",
-            "PhysicalResourceId": "arn:aws:cloudformation:us-west-1:635374934580:stack/wistia-pipeline/8dafdc40-fb30-11f0-a181-06bbe7d757dd",
+            "PhysicalResourceId": "arn:aws:cloudformation:us-west-1:635374934580:stack/wistia-pipeline/1bd47390-fb32-11f0-9136-021592f8edef",
             "ResourceType": "AWS::CloudFormation::Stack",
-            "Timestamp": "2026-01-27T03:30:40.336000+00:00",
+            "Timestamp": "2026-01-27T03:41:48.303000+00:00",
             "ResourceStatus": "REVIEW_IN_PROGRESS",
             "ResourceStatusReason": "User Initiated"
         }
