@@ -31,7 +31,7 @@ Resources:
   DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: wistia-data
+      BucketName: !Sub wistia-${AWS::AccountId}
 
 # --------------------------------------------------
 # Secrets Manager
@@ -49,7 +49,7 @@ Resources:
   WatermarkTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: wistiadb
+      TableName: !Sub ${ProjectName}-watermark
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -211,7 +211,7 @@ Resources:
   GlueCrawler:
     Type: AWS::Glue::Crawler
     Properties:
-      Name: wistia-curated-crawler
+      Name: !Sub ${ProjectName}-curated-crawler
       Role: !GetAtt GlueExecutionRole.Arn
       DatabaseName: !Ref GlueDatabase
       Targets:
