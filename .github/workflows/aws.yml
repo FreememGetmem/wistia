@@ -72,6 +72,7 @@ jobs:
         aws cloudformation deploy \
           --stack-name wistia-pipeline \
           --template-file infra/wistia_pipeline.yaml \
+          --parameter-overrides DataLakeBucket=wistia-data \
           --capabilities CAPABILITY_NAMED_IAM
 
     # -----------------------------------
