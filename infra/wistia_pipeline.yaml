@@ -114,7 +114,7 @@ Resources:
       Timeout: 300
       Code:
         S3Bucket: !Ref DataLakeBucket
-        S3Key: lambda/ingest.zip
+        S3Key: lambda/lambda.zip
       Environment:
         Variables:
           s3_bucket: !Ref DataLakeBucket

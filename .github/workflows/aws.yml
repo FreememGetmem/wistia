@@ -59,7 +59,7 @@ jobs:
     # -----------------------------------
     - name: Upload Lambda package
       run: |
-        aws s3 cp lambda.zip s3://${{ secrets.S3_BUCKET }}/lambda/lambda.zip
+        aws s3://wistia-635374934580-us-west-1/lambda/lambda.zip
 
     # -----------------------------------
     # Deploy CloudFormation Stack
@@ -80,5 +80,5 @@ jobs:
     - name: Upload PySpark job
       run: |
         aws s3 cp pyspark/transform_wistia.py \
-        s3://${{ secrets.S3_BUCKET }}/jobs/transform_wistia.py
+        s3://wistia-635374934580-us-west-1/jobs/transform_wistia.py
 
