@@ -64,7 +64,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: wistia-lambda-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -151,7 +150,6 @@ Resources:
   GlueExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: wistia-glue-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
