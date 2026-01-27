@@ -66,13 +66,18 @@ jobs:
     # -----------------------------------
     - name: Deploy Infrastructure
       run: |
+        
+        aws cloudformation delete-stack --stack-name wistia-pipeline --region us-west-1
+
+        aws cloudformation wait stack-delete-complete --stack-name wistia-pipeline --region us-west-1
+
         aws cloudformation validate-template \
           --template-body file://infra/wistia_pipeline.yaml
           
         aws cloudformation deploy \
           --stack-name wistia-pipeline \
           --template-file infra/wistia_pipeline.yaml \
-          --parameter-overrides DataLakeBucket=wistia-data \
+          --parameter-overrides DataLakeBucketName=wistia-data \
           --capabilities CAPABILITY_NAMED_IAM
 
     # -----------------------------------
