@@ -13,12 +13,12 @@ Parameters:
 
   RawPrefix:
     Type: String
-    Default: raw/
+    Default: data_raw/
 
   CuratedPrefix:
     Type: String
-    Default: curated/
-    
+    Default: curated_data/
+
   GlueJobRunMode:
     Type: String
     Default: scheduled
@@ -123,7 +123,7 @@ Resources:
           curated_prefix: !Ref CuratedPrefix
           watermark_table: !Ref WatermarkTable
           wistia_secret_name: !Ref WistiaSecret
-          media_ids: !Ref MediaIds
+          media_ids: "gskhw4w4lm,v08dlrgr7v"
           glue_job_name: !Sub ${ProjectName}-transform
 
 # --------------------------------------------------
