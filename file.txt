@@ -1,0 +1,15 @@
+{
+    "StackEvents": [
+        {
+            "StackId": "arn:aws:cloudformation:us-west-1:635374934580:stack/wistia-pipeline/77977080-fbf8-11f0-bf48-06a8e2314ffd",
+            "EventId": "77972260-fbf8-11f0-bf48-06a8e2314ffd",
+            "StackName": "wistia-pipeline",
+            "LogicalResourceId": "wistia-pipeline",
+            "PhysicalResourceId": "arn:aws:cloudformation:us-west-1:635374934580:stack/wistia-pipeline/77977080-fbf8-11f0-bf48-06a8e2314ffd",
+            "ResourceType": "AWS::CloudFormation::Stack",
+            "Timestamp": "2026-01-28T03:21:42.624000+00:00",
+            "ResourceStatus": "REVIEW_IN_PROGRESS",
+            "ResourceStatusReason": "User Initiated"
+        }
+    ]
+}
