@@ -59,7 +59,6 @@ jobs:
     # -----------------------------------
     - name: Upload Lambda package
       run: |
-        aws s3 mb s3://${{ secrets.S3_BUCKET }}
         aws s3 cp lambda.zip s3://${{ secrets.S3_BUCKET }}/lambda/lambda.zip
 
     # -----------------------------------
