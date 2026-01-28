@@ -25,6 +25,7 @@ DWH_BASE = "s3://wistia-data/data_curated/"
 MEDIA_PATH = f"{RAW_BASE}/media/*/*.json"
 
 EVENTS_PATH = f"{RAW_BASE}/events/*/*/*.json"
+
 VISITORS_PATH = f"{RAW_BASE}/visitors/*/*/*.json"
 
 # --------------------------------------------------
