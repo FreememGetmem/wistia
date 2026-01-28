@@ -41,7 +41,7 @@ Resources:
   DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${DataLakeBucketName}-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${ProjectName}-${AWS::AccountId}-${AWS::Region}"
       VersioningConfiguration:
         Status: Enabled
 
