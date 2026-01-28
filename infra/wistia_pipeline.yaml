@@ -1,69 +1,82 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Wistia Pipeline - Ingestion and Transformation Stack
+Description: >
+  Wistia Video Analytics - End-to-End Data Engineering Pipeline
+  (S3, Lambda, IAM, DynamoDB, Secrets Manager, EventBridge)
 
+# ------------------------------------------------------------
+# Parameters
+# ------------------------------------------------------------
 Parameters:
   ProjectName:
     Type: String
     Default: wistia-pipeline
+
+  DataLakeBucketName:
+    Type: String
+    Description: S3 bucket for raw and curated data
+
+  LambdaCodeS3Key:
+    Type: String
+    Default: lambda/lambda.zip
+    Description: S3 key for Lambda ZIP package
 
   WistiaSecretName:
     Type: String
     Default: WISTIA_API_TOKEN
     Description: Secrets Manager secret storing WISTIA_API_TOKEN
 
-  RawPrefix:
+  ScheduleExpression:
     Type: String
-    Default: data_raw/
+    Default: rate(1 hour)
+    Description: EventBridge schedule for ingestion
 
-  CuratedPrefix:
-    Type: String
-    Default: curated_data/
-
-  GlueJobRunMode:
-    Type: String
-    Default: scheduled
-
+# ------------------------------------------------------------
+# Resources
+# ------------------------------------------------------------
 Resources:
 
-# --------------------------------------------------
-# S3 Data Lake Bucket
-# --------------------------------------------------
+  # ==========================
+  # S3 Data Lake
+  # ==========================
   DataLakeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${ProjectName}-data-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "${DataLakeBucketName}-${AWS::AccountId}-${AWS::Region}"
+      VersioningConfiguration:
+        Status: Enabled
 
-# --------------------------------------------------
-# Secrets Manager
-# --------------------------------------------------
-  WistiaSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: wistia-api-secret
-      Description: Wistia API token
-      SecretString: '{"WISTIA_API_TOKEN":"0323ade64e13f79821bdc0f2a9410d9ec3873aa9df01f8a4a54d4e0f3dd2e6b4"}'
-
-# --------------------------------------------------
-# DynamoDB Watermark Table
-# --------------------------------------------------
+  # ==========================
+  # DynamoDB Watermark Table
+  # ==========================
   WatermarkTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub ${ProjectName}-watermark
+      TableName: !Sub wistiadb
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: entity
           AttributeType: S
       KeySchema:
-        - AttributeName: id
+        - AttributeName: entity
           KeyType: HASH
 
-# --------------------------------------------------
-# IAM Role for Lambda
-# --------------------------------------------------
+  # ==========================
+  # Secrets Manager
+  # ==========================
+  WistiaApiSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Ref WistiaSecretName
+      Description: Wistia API token (DO NOT COMMIT)
+      SecretString: '{"WISTIA_API_TOKEN":"0323ade64e13f79821bdc0f2a9410d9ec3873aa9df01f8a4a54d4e0f3dd2e6b4"}'
+
+  # ==========================
+  # IAM Role for Lambda
+  # ==========================
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${ProjectName}-lambda-role-${AWS::Region}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -71,83 +84,54 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
       Policies:
-        - PolicyName: LambdaDataAccess
+        - PolicyName: WistiaPipelinePolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # S3 Write
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource: "arn:aws:s3:::${DataLakeBucket}/*"
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+
+              # DynamoDB watermark
               - Effect: Allow
                 Action:
-                  - dynamodb:PutItem
                   - dynamodb:GetItem
-                  - dynamodb:UpdateItem
+                  - dynamodb:PutItem
                 Resource: !GetAtt WatermarkTable.Arn
+
+              # Secrets Manager
               - Effect: Allow
-                Action: secretsmanager:GetSecretValue
-                Resource: !Ref WistiaSecret
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${WistiaSecretName}-*"
+              
+              # Glue job
               - Effect: Allow
                 Action:
                   - glue:StartJobRun
+                Resource: !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:job/${ProjectName}-transform"
+              
+              # Crawler run
+              - Effect: Allow
+                Action:
                   - glue:StartCrawler
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:crawler/wistia-curated-crawler"
 
-# --------------------------------------------------
-# Lambda Function
-# --------------------------------------------------
-  IngestLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub ${ProjectName}-ingest
-      Runtime: python3.10
-      Handler: lambda_function.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 300
-      Code:
-        S3Bucket: !Ref DataLakeBucket
-        S3Key: lambda/lambda.zip
-      Environment:
-        Variables:
-          s3_bucket: !Ref DataLakeBucket
-          raw_prefix: !Ref RawPrefix
-          curated_prefix: !Ref CuratedPrefix
-          watermark_table: !Ref WatermarkTable
-          wistia_secret_name: !Ref WistiaSecret
-          media_ids: "gskhw4w4lm,v08dlrgr7v"
-          glue_job_name: !Sub ${ProjectName}-transform
-
-# --------------------------------------------------
-# EventBridge Schedule (7 days)
-# --------------------------------------------------
-  IngestSchedule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: rate(7 days)
-      Targets:
-        - Arn: !GetAtt IngestLambda.Arn
-          Id: IngestLambdaTarget
-
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref IngestLambda
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt IngestSchedule.Arn
-
-# --------------------------------------------------
-# IAM Role for Glue
-# --------------------------------------------------
+  # ==========================
+  # IAM Role for Glue
+  # ==========================
   GlueExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${ProjectName}-glue-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -162,56 +146,177 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # Access to data lake objects
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                  - s3:ListBucket
-                Resource:
-                  - !Sub arn:aws:s3:::${DataLakeBucket}
-                  - !Sub arn:aws:s3:::${DataLakeBucket}/*
+                  - s3:DeleteObject  # optional if overwriting
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/*"
+              
+              # Access to the Glue job script itself
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${DataLakeBucketName}/jobs/transform_wistia.py"
 
-# --------------------------------------------------
-# Glue Database
-# --------------------------------------------------
+  # ==========================
+  # Glue Job
+  # ==========================
+  TransformWistiaJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: !Sub "${ProjectName}-transform"
+      Role: !GetAtt GlueExecutionRole.Arn
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${DataLakeBucketName}/jobs/transform_wistia.py"
+        PythonVersion: "3"
+      GlueVersion: "4.0"
+      WorkerType: G.1X
+      NumberOfWorkers: 2
+      DefaultArguments:
+        "--job-language": "python"
+        "--enable-continuous-cloudwatch-log": "true"
+        "--enable-metrics": "true"
+        # ? Custom parameters
+        "--bucket": !Ref DataLakeBucketName
+        "--RAW_PREFIX": "data_raw"
+        "--CURATED_PREFIX": "data_curated"
+        "--run_mode": "scheduled"
+        "--GLUE_JOB_NAME": "wistia-tranform"
+  # ==========================
+  # Glue Database
+  # ==========================
   GlueDatabase:
     Type: AWS::Glue::Database
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: !Sub ${ProjectName}_analytics
+        Name: wistia_analytics
 
-# --------------------------------------------------
-# Glue Job
-# --------------------------------------------------
-  GlueJob:
-    Type: AWS::Glue::Job
-    Properties:
-      Name: !Sub ${ProjectName}-transform
-      Role: !GetAtt GlueExecutionRole.Arn
-      Command:
-        Name: glueetl
-        PythonVersion: "3"
-        ScriptLocation: !Sub s3://${DataLakeBucket}/jobs/transform.py
-      DefaultArguments:
-        --bucket: !Ref DataLakeBucket
-        --raw_prefix: !Ref RawPrefix
-        --curated_prefix: !Ref CuratedPrefix
-        --run_mode: !Ref GlueJobRunMode
-        --glue_job_name: !Sub ${ProjectName}-transform
-      GlueVersion: "4.0"
-      MaxRetries: 1
-      Timeout: 10
-
-# --------------------------------------------------
-# Glue Crawler
-# --------------------------------------------------
+  # ==========================
+  # Glue Crawler (Curated Zone)
+  # ==========================
   GlueCrawler:
     Type: AWS::Glue::Crawler
     Properties:
-      Name: !Sub ${ProjectName}-curated-crawler
-      Role: !GetAtt GlueExecutionRole.Arn
-      DatabaseName: !Ref GlueDatabase
+      Name: wistia-curated-crawler
+      Role: !GetAtt GlueCrawlerRole.Arn
+      DatabaseName: wistia_analytics
       Targets:
         S3Targets:
-          - Path: !Sub s3://${DataLakeBucket}/${CuratedPrefix}
+          - Path: !Sub "s3://${DataLakeBucketName}/data_curated/"
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: DEPRECATE_IN_DATABASE  
+
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: wistia-workgroup
+      State: ENABLED
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          OutputLocation: !Sub "s3://${DataLakeBucketName}/athena-results/"
+          EncryptionConfiguration:
+            EncryptionOption: SSE_S3
+
+  # ==========================
+  # Glue IAM Role
+  # ==========================
+  GlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GlueCrawlerS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket                  
+                Resource:
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}"
+                  - !Sub "arn:aws:s3:::${DataLakeBucketName}/*"                 
+
+  # ==========================
+  # Lambda Function
+  # ==========================
+  IngestWistiaLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-ingest"
+      Runtime: python3.10
+      Handler: ingest_wistia.lambda_handler
+      Timeout: 120
+      MemorySize: 512
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+      Code:
+        S3Bucket: !Ref DataLakeBucketName
+        S3Key: lambda/lambda.zip
+
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref DataLakeBucketName
+          RAW_PREFIX: data_raw
+          CURATED_PREFIX: data_curated
+          WATERMARK_TABLE: !Ref WatermarkTable
+          WISTIA_SECRET_NAME: !Ref WistiaSecretName
+          MEDIA_IDS: "gskhw4w4lm,v08dlrgr7v"
+          GLUE_JOB_NAME: !Ref TransformWistiaJob
+
+  # ==========================
+  # EventBridge Schedule
+  # ==========================
+
+  IngestionSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${ProjectName}-schedule"
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Id: LambdaTarget
+          Arn: !GetAtt IngestWistiaLambda.Arn
+
+  PermissionForEventBridge:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IngestWistiaLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt IngestionSchedule.Arn
+
+# ------------------------------------------------------------
+# Outputs
+# ------------------------------------------------------------
+Outputs:
+  BucketName:
+    Value: !Ref DataLakeBucketName
+
+  LambdaName:
+    Value: !Ref IngestWistiaLambda
+
+  WatermarkTableName:
+    Value: !Ref WatermarkTable
+
+
+
+
+
+# aws cloudformation delete-stack --stack-name wistia-pipeline 
+# aws cloudformation wait stack-delete-complete --stack-name wistia-pipeline
