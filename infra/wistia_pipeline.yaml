@@ -10,6 +10,9 @@ Parameters:
   ProjectName:
     Type: String
     Default: wistia-pipeline
+  
+  DataLakeBucket:
+    Type: String
 
   LambdaCodeS3Key:
     Type: String
@@ -30,17 +33,6 @@ Parameters:
 # Resources
 # ------------------------------------------------------------
 Resources:
-
-  # ==========================
-  # S3 Data Lake
-  # ==========================
-  DataLakeBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${ProjectName}-${AWS::AccountId}-${AWS::Region}"
-      VersioningConfiguration:
-        Status: Enabled
-
   # ==========================
   # DynamoDB Watermark Table
   # ==========================
